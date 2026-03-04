@@ -4,6 +4,7 @@ type bandwidth =
   | Scott
   | Silverman
   | Fixed of float
+[@@deriving show, eq, hash, compare]
 
 type estimate = {
   points : vec;
@@ -40,12 +41,13 @@ val find_modes : estimate -> int array
     - Writes in place, no allocation visible to caller *)
 
 type indicator =
-  | Density of { window : int; h : float }
-  | NumModes of { window : int; h : float; n_points : int }
-  | DominantMode of { window : int; h : float; n_points : int }
-  | ModeSpread of { window : int; h : float; n_points : int }
+  | Density of { window : int; bw : bandwidth }
+  | NumModes of { window : int; bw : bandwidth; n_points : int }
+  | DominantMode of { window : int; bw : bandwidth; n_points : int }
+  | ModeSpread of { window : int; bw : bandwidth; n_points : int }
 [@@deriving show, eq, hash, compare]
-(** KDE-derived indicators. [window] is the lookback size. [h] is bandwidth.
+(** KDE-derived indicators. [window] is the lookback size. [bw] is bandwidth
+    selection method (Scott, Silverman, or Fixed).
     - [Density]: density at current price (how "typical" it is)
     - [NumModes]: number of modes in the window (1 = unimodal, 2+ = multimodal)
     - [DominantMode]: x-value of the highest-density mode

@@ -1,9 +1,15 @@
 type vec = (float, Bigarray.float64_elt, Bigarray.c_layout) Bigarray.Array1.t
 
+let hash_fold_int = Ppx_hash_lib.Std.Hash.fold_int
+let hash_fold_float = Ppx_hash_lib.Std.Hash.fold_float
+let compare_int = Int.compare
+let compare_float = Float.compare
+
 type bandwidth =
   | Scott
   | Silverman
   | Fixed of float
+[@@deriving show, eq, hash, compare]
 
 type estimate = {
   points : vec;
@@ -142,16 +148,11 @@ let find_modes result =
 
 (* -- indicator-style API -- *)
 
-let hash_fold_int = Ppx_hash_lib.Std.Hash.fold_int
-let hash_fold_float = Ppx_hash_lib.Std.Hash.fold_float
-let compare_int = Int.compare
-let compare_float = Float.compare
-
 type indicator =
-  | Density of { window : int; h : float }
-  | NumModes of { window : int; h : float; n_points : int }
-  | DominantMode of { window : int; h : float; n_points : int }
-  | ModeSpread of { window : int; h : float; n_points : int }
+  | Density of { window : int; bw : bandwidth }
+  | NumModes of { window : int; bw : bandwidth; n_points : int }
+  | DominantMode of { window : int; bw : bandwidth; n_points : int }
+  | ModeSpread of { window : int; bw : bandwidth; n_points : int }
 [@@deriving show, eq, hash, compare]
 
 let lookback ind =
@@ -163,40 +164,38 @@ let lookback ind =
   in
   window - 1
 
-let compute_bar_density h window input bar_idx =
-  let x = input.{bar_idx} in
-  let start = bar_idx - window + 1 in
-  let inv_h = 1.0 /. h in
-  let s = ref 0.0 in
-  for j = start to bar_idx do
-    let u = (x -. input.{j}) *. inv_h in
-    s := !s +. gaussian_kernel u
-  done;
-  !s *. inv_h /. Float.of_int window
-
-let compute_bar_with_estimate h n_points window input bar_idx =
+let compute_window_vec window input bar_idx =
   let start = bar_idx - window + 1 in
   let win = create_vec window in
   for j = 0 to window - 1 do
     win.{j} <- input.{start + j}
   done;
-  estimate ~bw:(Fixed h) ~n_points win
+  win
+
+let compute_bar_density bw window input bar_idx =
+  let win = compute_window_vec window input bar_idx in
+  let h = compute_bandwidth bw win in
+  evaluate_at h win input.{bar_idx}
+
+let compute_bar_with_estimate bw n_points window input bar_idx =
+  let win = compute_window_vec window input bar_idx in
+  estimate ~bw ~n_points win
 
 let compute_bar ind input bar_idx =
   match ind with
-  | Density { window; h } ->
-    compute_bar_density h window input bar_idx
-  | NumModes { window; h; n_points } ->
-    let est = compute_bar_with_estimate h n_points window input bar_idx in
+  | Density { window; bw } ->
+    compute_bar_density bw window input bar_idx
+  | NumModes { window; bw; n_points } ->
+    let est = compute_bar_with_estimate bw n_points window input bar_idx in
     let modes = find_modes est in
     Float.of_int (Array.length modes)
-  | DominantMode { window; h; n_points } ->
-    let est = compute_bar_with_estimate h n_points window input bar_idx in
+  | DominantMode { window; bw; n_points } ->
+    let est = compute_bar_with_estimate bw n_points window input bar_idx in
     let modes = find_modes est in
     if Array.length modes > 0 then est.points.{modes.(0)}
     else Float.nan
-  | ModeSpread { window; h; n_points } ->
-    let est = compute_bar_with_estimate h n_points window input bar_idx in
+  | ModeSpread { window; bw; n_points } ->
+    let est = compute_bar_with_estimate bw n_points window input bar_idx in
     let modes = find_modes est in
     let n = Array.length modes in
     if n < 2 then 0.0

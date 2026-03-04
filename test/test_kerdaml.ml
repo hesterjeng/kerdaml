@@ -496,10 +496,10 @@ let test_bimodal_generated () =
 
 let test_indicator_lookback () =
   section "indicator lookback";
-  check "Density lookback" (Kerdaml.lookback (Density { window = 20; h = 0.5 }) = 19);
-  check "NumModes lookback" (Kerdaml.lookback (NumModes { window = 50; h = 1.0; n_points = 128 }) = 49);
-  check "DominantMode lookback" (Kerdaml.lookback (DominantMode { window = 30; h = 0.8; n_points = 128 }) = 29);
-  check "ModeSpread lookback" (Kerdaml.lookback (ModeSpread { window = 10; h = 0.3; n_points = 128 }) = 9)
+  check "Density lookback" (Kerdaml.lookback (Density { window = 20; bw = Fixed 0.5 }) = 19);
+  check "NumModes lookback" (Kerdaml.lookback (NumModes { window = 50; bw = Fixed 1.0; n_points = 128 }) = 49);
+  check "DominantMode lookback" (Kerdaml.lookback (DominantMode { window = 30; bw = Fixed 0.8; n_points = 128 }) = 29);
+  check "ModeSpread lookback" (Kerdaml.lookback (ModeSpread { window = 10; bw = Fixed 0.3; n_points = 128 }) = 9)
 
 let test_indicator_density () =
   section "indicator Density";
@@ -508,12 +508,12 @@ let test_indicator_density () =
     [| 1.0; 2.0; 3.0; 4.0; 5.0; 3.0; 3.0; 3.0; 3.0; 3.0;
        3.0; 3.0; 3.0; 3.0; 3.0; 3.0; 3.0; 3.0; 3.0; 3.0 |] in
   let output = Kerdaml.create_vec 20 in
-  Kerdaml.compute (Density { window = 5; h = 0.5 }) input output;
+  Kerdaml.compute (Density { window = 5; bw = Fixed 0.5 }) input output;
   (* Bars before lookback (window-1=4) should be untouched.
      create_vec uses Bigarray.Array1.create which may not zero memory,
      so use sentinel test pattern instead. *)
   for i = 0 to 19 do output.{i} <- -1.0 done;
-  Kerdaml.compute (Density { window = 5; h = 0.5 }) input output;
+  Kerdaml.compute (Density { window = 5; bw = Fixed 0.5 }) input output;
   check "bar 0 untouched" (output.{0} = -1.0);
   check "bar 3 untouched" (output.{3} = -1.0);
   (* Bar 4 (=lookback) onward should be positive *)
@@ -527,7 +527,7 @@ let test_indicator_density_matches_evaluate () =
   let input = Kerdaml.vec_of_array [| 1.0; 2.0; 3.0; 4.0; 5.0 |] in
   let output = Kerdaml.create_vec 5 in
   let h = 0.8 in
-  Kerdaml.compute (Density { window = 3; h }) input output;
+  Kerdaml.compute (Density { window = 3; bw = Fixed h }) input output;
   (* Bar 4: window is [3.0, 4.0, 5.0], evaluate density at x=5.0 *)
   let window_data = Kerdaml.vec_of_array [| 3.0; 4.0; 5.0 |] in
   let expected = Kerdaml.evaluate_at h window_data 5.0 in
@@ -539,13 +539,14 @@ let test_indicator_density_single_bar () =
   let input = Kerdaml.vec_of_array [| 1.0; 2.0; 3.0; 4.0; 5.0 |] in
   let output_all = Kerdaml.create_vec 5 in
   let output_one = Kerdaml.create_vec 5 in
-  let ind = Kerdaml.Density { window = 3; h = 0.8 } in
+  for i = 0 to 4 do output_one.{i} <- -1.0 done;
+  let ind = Kerdaml.Density { window = 3; bw = Fixed 0.8 } in
   Kerdaml.compute ind input output_all;
   Kerdaml.compute ~i:4 ind input output_one;
   check "single-bar matches all-bars at i=4"
     (approx ~tol:1e-15 output_one.{4} output_all.{4});
   (* Other bars should be untouched *)
-  check "bar 1 untouched in single-bar mode" (output_one.{1} = 0.0)
+  check "bar 1 untouched in single-bar mode" (output_one.{1} = -1.0)
 
 let test_indicator_num_modes_unimodal () =
   section "indicator NumModes unimodal data";
@@ -553,7 +554,7 @@ let test_indicator_num_modes_unimodal () =
   let input = Kerdaml.vec_of_array
     [| 5.0; 5.1; 4.9; 5.05; 4.95; 5.0; 5.1; 4.9; 5.05; 4.95 |] in
   let output = Kerdaml.create_vec 10 in
-  Kerdaml.compute (NumModes { window = 5; h = 0.3; n_points = 128 }) input output;
+  Kerdaml.compute (NumModes { window = 5; bw = Fixed 0.3; n_points = 128 }) input output;
   check "unimodal window → 1 mode" (approx ~tol:0.5 output.{9} 1.0)
 
 let test_indicator_num_modes_bimodal () =
@@ -562,7 +563,7 @@ let test_indicator_num_modes_bimodal () =
   let input = Kerdaml.vec_of_array
     [| 0.0; 10.0; 0.0; 10.0; 0.0; 10.0; 0.0; 10.0; 0.0; 10.0 |] in
   let output = Kerdaml.create_vec 10 in
-  Kerdaml.compute (NumModes { window = 6; h = 0.5; n_points = 256 }) input output;
+  Kerdaml.compute (NumModes { window = 6; bw = Fixed 0.5; n_points = 256 }) input output;
   check "bimodal window → 2 modes" (approx ~tol:0.5 output.{9} 2.0)
 
 let test_indicator_dominant_mode () =
@@ -571,7 +572,7 @@ let test_indicator_dominant_mode () =
   let input = Kerdaml.vec_of_array
     [| 7.0; 7.1; 6.9; 7.05; 6.95; 7.0; 7.1; 6.9; 7.05; 6.95 |] in
   let output = Kerdaml.create_vec 10 in
-  Kerdaml.compute (DominantMode { window = 5; h = 0.3; n_points = 128 }) input output;
+  Kerdaml.compute (DominantMode { window = 5; bw = Fixed 0.3; n_points = 128 }) input output;
   check (Printf.sprintf "dominant mode near 7.0 (got %.2f)" output.{9})
     (approx ~tol:0.5 output.{9} 7.0)
 
@@ -580,7 +581,7 @@ let test_indicator_mode_spread_unimodal () =
   let input = Kerdaml.vec_of_array
     [| 5.0; 5.1; 4.9; 5.05; 4.95; 5.0; 5.1; 4.9; 5.05; 4.95 |] in
   let output = Kerdaml.create_vec 10 in
-  Kerdaml.compute (ModeSpread { window = 5; h = 0.3; n_points = 128 }) input output;
+  Kerdaml.compute (ModeSpread { window = 5; bw = Fixed 0.3; n_points = 128 }) input output;
   check "unimodal → spread = 0" (output.{9} = 0.0)
 
 let test_indicator_mode_spread_bimodal () =
@@ -588,7 +589,7 @@ let test_indicator_mode_spread_bimodal () =
   let input = Kerdaml.vec_of_array
     [| 0.0; 10.0; 0.0; 10.0; 0.0; 10.0; 0.0; 10.0; 0.0; 10.0 |] in
   let output = Kerdaml.create_vec 10 in
-  Kerdaml.compute (ModeSpread { window = 6; h = 0.5; n_points = 256 }) input output;
+  Kerdaml.compute (ModeSpread { window = 6; bw = Fixed 0.5; n_points = 256 }) input output;
   check (Printf.sprintf "bimodal spread near 10 (got %.2f)" output.{9})
     (approx ~tol:1.0 output.{9} 10.0)
 
@@ -598,7 +599,7 @@ let test_indicator_before_lookback_untouched () =
   let output = Kerdaml.create_vec 5 in
   (* Fill output with sentinel *)
   for i = 0 to 4 do output.{i} <- 999.0 done;
-  Kerdaml.compute (Density { window = 3; h = 0.5 }) input output;
+  Kerdaml.compute (Density { window = 3; bw = Fixed 0.5 }) input output;
   check "bar 0 sentinel preserved" (output.{0} = 999.0);
   check "bar 1 sentinel preserved" (output.{1} = 999.0);
   (* window=3 → lookback=2, so bar 2 is first computed *)
@@ -611,7 +612,7 @@ let test_indicator_single_bar_before_lookback () =
   let input = Kerdaml.vec_of_array [| 1.0; 2.0; 3.0; 4.0; 5.0 |] in
   let output = Kerdaml.create_vec 5 in
   for i = 0 to 4 do output.{i} <- 999.0 done;
-  Kerdaml.compute ~i:1 (Density { window = 5; h = 0.5 }) input output;
+  Kerdaml.compute ~i:1 (Density { window = 5; bw = Fixed 0.5 }) input output;
   check "bar 1 still sentinel (before lookback)" (output.{1} = 999.0)
 
 (* ---- run all ---- *)
