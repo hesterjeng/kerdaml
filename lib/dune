@@ -1,2 +1,4 @@
 (library
- (name kerdaml))
+ (name kerdaml)
+ (preprocess
+  (pps ppx_deriving.std ppx_hash ppx_compare)))

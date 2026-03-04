@@ -142,11 +142,17 @@ let find_modes result =
 
 (* -- indicator-style API -- *)
 
+let hash_fold_int = Ppx_hash_lib.Std.Hash.fold_int
+let hash_fold_float = Ppx_hash_lib.Std.Hash.fold_float
+let compare_int = Int.compare
+let compare_float = Float.compare
+
 type indicator =
   | Density of { window : int; h : float }
   | NumModes of { window : int; h : float; n_points : int }
   | DominantMode of { window : int; h : float; n_points : int }
   | ModeSpread of { window : int; h : float; n_points : int }
+[@@deriving show, eq, hash, compare]
 
 let lookback ind =
   let window = match ind with

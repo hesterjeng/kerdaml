@@ -44,6 +44,7 @@ type indicator =
   | NumModes of { window : int; h : float; n_points : int }
   | DominantMode of { window : int; h : float; n_points : int }
   | ModeSpread of { window : int; h : float; n_points : int }
+[@@deriving show, eq, hash, compare]
 (** KDE-derived indicators. [window] is the lookback size. [h] is bandwidth.
     - [Density]: density at current price (how "typical" it is)
     - [NumModes]: number of modes in the window (1 = unimodal, 2+ = multimodal)
